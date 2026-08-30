@@ -45,9 +45,12 @@ def ask():
         }), 500
 
 
+
 @app.route("/telegram", methods=["POST"])
 def telegram():
     update = request.get_json() or {}
+
+    print("TELEGRAM UPDATE:", update)
 
     message = update.get("message")
 
@@ -61,7 +64,8 @@ def telegram():
         return jsonify({"ok": True})
 
     try:
-        # Gemini
+        print("QUESTION:", question)
+
         response = gemini.models.generate_content(
             model="gemini-2.5-flash",
             contents=question
@@ -69,8 +73,9 @@ def telegram():
 
         answer = response.text
 
-        # Telegram
-        result = requests.post(
+        print("GEMINI ANSWER:", answer)
+
+        telegram_response = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
                 "chat_id": chat_id,
@@ -79,18 +84,9 @@ def telegram():
             timeout=20
         )
 
-        print("Telegram response:", result.text)
+        print("TELEGRAM RESPONSE:", telegram_response.text)
 
     except Exception as e:
-        print("ERROR:", e)
+        print("ERROR:", repr(e))
 
     return jsonify({"ok": True})
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
