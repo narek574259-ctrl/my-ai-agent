@@ -1,4 +1,3 @@
-
 import os
 import requests
 from flask import Flask, request, jsonify
@@ -19,6 +18,10 @@ client = genai.Client(
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
+# IMPORTANT:
+# Use the model available to your account
+GEMINI_MODEL = "gemini-3.6-flash"
+
 
 # =========================
 # HOME
@@ -30,7 +33,7 @@ def home():
 
 
 # =========================
-# TELEGRAM
+# TELEGRAM WEBHOOK
 # =========================
 
 @app.route("/telegram", methods=["POST"])
@@ -52,56 +55,16 @@ def telegram():
         return jsonify({"ok": True})
 
     print("USER:", text)
+    print("USING MODEL:", GEMINI_MODEL)
 
     try:
-
-        # =========================
-        # SHOW AVAILABLE GEMINI MODELS
-        # =========================
-
-        print("AVAILABLE GEMINI MODELS:")
-
-        models = list(client.models.list())
-
-        for model in models:
-            print(model.name)
-
-        # =========================
-        # FIND A GEMINI MODEL
-        # =========================
-
-        model_name = None
-
-        for model in models:
-            name = model.name or ""
-
-            if "gemini" in name.lower() and "generateContent" in str(
-                getattr(model, "supported_actions", "")
-            ):
-                model_name = name
-                break
-
-        # Fallback
-        if not model_name:
-
-            for model in models:
-                name = model.name or ""
-
-                if "gemini" in name.lower():
-                    model_name = name
-                    break
-
-        if not model_name:
-            raise Exception("No Gemini model found for this API key.")
-
-        print("USING MODEL:", model_name)
 
         # =========================
         # GEMINI
         # =========================
 
         response = client.models.generate_content(
-            model=model_name,
+            model=GEMINI_MODEL,
             contents=text
         )
 
@@ -110,13 +73,13 @@ def telegram():
         if not answer:
             answer = "Չկարողացա պատասխան կազմել։"
 
-        print("GEMINI ANSWER:", answer)
+        print("GEMINI:", answer)
 
         # =========================
-        # SEND TELEGRAM
+        # TELEGRAM
         # =========================
 
-        tg = requests.post(
+        telegram_response = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
                 "chat_id": chat_id,
@@ -125,15 +88,14 @@ def telegram():
             timeout=30
         )
 
-        print("TELEGRAM STATUS:", tg.status_code)
-        print("TELEGRAM RESPONSE:", tg.text)
+        print("TELEGRAM STATUS:", telegram_response.status_code)
+        print("TELEGRAM RESPONSE:", telegram_response.text)
 
     except Exception as e:
 
         print("ERROR:", repr(e))
 
         try:
-
             requests.post(
                 f"{TELEGRAM_URL}/sendMessage",
                 json={
@@ -142,9 +104,7 @@ def telegram():
                 },
                 timeout=20
             )
-
         except Exception as telegram_error:
-
             print("TELEGRAM ERROR:", repr(telegram_error))
 
     return jsonify({"ok": True})
