@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from google import genai
 
 app = Flask(__name__)
@@ -8,9 +8,9 @@ client = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"]
 )
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
-    return "AI Agent is running! 🤖"
+    return render_template("index.html")
 
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -25,9 +25,8 @@ def ask():
         contents=question
     )
 
-    return jsonify({
-        "answer": response.text
-    })
+    return jsonify({"answer": response.text})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
