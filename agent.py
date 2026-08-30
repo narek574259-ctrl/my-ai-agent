@@ -5,23 +5,15 @@ from google import genai
 
 app = Flask(__name__)
 
-# =========================
-# GEMINI
-# =========================
-
+# Gemini
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
     raise Exception("GEMINI_API_KEY is missing")
 
-client = genai.Client(
-    api_key=GEMINI_API_KEY
-)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# =========================
-# TELEGRAM
-# =========================
-
+# Telegram
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 if not TELEGRAM_TOKEN:
@@ -30,18 +22,10 @@ if not TELEGRAM_TOKEN:
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 
-# =========================
-# HOME
-# =========================
-
 @app.route("/")
 def home():
     return "AI Agent is running! 🤖"
 
-
-# =========================
-# TELEGRAM
-# =========================
 
 @app.route("/telegram", methods=["POST"])
 def telegram():
@@ -65,22 +49,18 @@ def telegram():
 
         print("USER MESSAGE:", question)
 
-        # Create Gemini chat
-        chat = client.chats.create(
-            model="gemini-2.5-flash"
+        # Gemini
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=question
         )
 
-        # Send user message to Gemini
-        response = chat.send_message(
-            question
-        )
-
-        answer = response.text or "Չկարողացա պատասխանել։"
+        answer = response.text
 
         print("GEMINI ANSWER:", answer)
 
-        # Send answer back to Telegram
-        telegram_response = requests.post(
+        # Telegram
+        result = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
                 "chat_id": chat_id,
@@ -89,25 +69,14 @@ def telegram():
             timeout=20
         )
 
-        print(
-            "TELEGRAM STATUS:",
-            telegram_response.status_code
-        )
-
-        print(
-            "TELEGRAM RESPONSE:",
-            telegram_response.text
-        )
+        print("TELEGRAM STATUS:", result.status_code)
+        print("TELEGRAM RESPONSE:", result.text)
 
     except Exception as e:
 
-        print(
-            "ERROR:",
-            repr(e)
-        )
+        print("GEMINI ERROR:", repr(e))
 
         try:
-
             requests.post(
                 f"{TELEGRAM_URL}/sendMessage",
                 json={
@@ -116,26 +85,15 @@ def telegram():
                 },
                 timeout=20
             )
-
         except Exception as telegram_error:
-
-            print(
-                "TELEGRAM ERROR:",
-                repr(telegram_error)
-            )
+            print("TELEGRAM ERROR:", repr(telegram_error))
 
     return jsonify({"ok": True})
 
 
-# =========================
-# START
-# =========================
-
 if __name__ == "__main__":
 
-    port = int(
-        os.environ.get("PORT", 10000)
-    )
+    port = int(os.environ.get("PORT", 10000))
 
     app.run(
         host="0.0.0.0",
