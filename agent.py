@@ -14,10 +14,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise Exception("GEMINI_API_KEY is missing")
 
-gemini = genai.Client(
+client = genai.Client(
     api_key=GEMINI_API_KEY
 )
-
 
 # =========================
 # TELEGRAM
@@ -41,48 +40,7 @@ def home():
 
 
 # =========================
-# TEST GEMINI
-# =========================
-
-@app.route("/ask", methods=["POST"])
-def ask():
-
-    data = request.get_json() or {}
-    question = data.get("question", "").strip()
-
-    if not question:
-        return jsonify({
-            "error": "Question is required"
-        }), 400
-
-    try:
-
-        print("QUESTION:", question)
-
-        response = gemini.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=question
-        )
-
-        answer = response.text or "AI-ը պատասխան չտվեց։"
-
-        print("GEMINI ANSWER:", answer)
-
-        return jsonify({
-            "answer": answer
-        })
-
-    except Exception as e:
-
-        print("GEMINI ERROR:", repr(e))
-
-        return jsonify({
-            "error": "Gemini error"
-        }), 500
-
-
-# =========================
-# TELEGRAM WEBHOOK
+# TELEGRAM
 # =========================
 
 @app.route("/telegram", methods=["POST"])
@@ -97,9 +55,7 @@ def telegram():
     if not message:
         return jsonify({"ok": True})
 
-    chat = message.get("chat", {})
-    chat_id = chat.get("id")
-
+    chat_id = message.get("chat", {}).get("id")
     question = message.get("text", "").strip()
 
     if not chat_id or not question:
@@ -109,23 +65,21 @@ def telegram():
 
         print("USER MESSAGE:", question)
 
-        # -------------------------
-        # ASK GEMINI
-        # -------------------------
+        # Create Gemini chat
+        chat = client.chats.create(
+            model="gemini-2.5-flash"
+        )
 
-        response = gemini.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=question
+        # Send user message to Gemini
+        response = chat.send_message(
+            question
         )
 
         answer = response.text or "Չկարողացա պատասխանել։"
 
         print("GEMINI ANSWER:", answer)
 
-        # -------------------------
-        # SEND TO TELEGRAM
-        # -------------------------
-
+        # Send answer back to Telegram
         telegram_response = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
@@ -145,12 +99,12 @@ def telegram():
             telegram_response.text
         )
 
-        if not telegram_response.ok:
-            print("TELEGRAM SEND ERROR")
-
     except Exception as e:
 
-        print("TELEGRAM/GEMINI ERROR:", repr(e))
+        print(
+            "ERROR:",
+            repr(e)
+        )
 
         try:
 
@@ -158,7 +112,7 @@ def telegram():
                 f"{TELEGRAM_URL}/sendMessage",
                 json={
                     "chat_id": chat_id,
-                    "text": "❌ AI-ի մոտ սխալ է տեղի ունեցել։"
+                    "text": "❌ Gemini-ի մոտ սխալ է տեղի ունեցել։"
                 },
                 timeout=20
             )
@@ -182,9 +136,6 @@ if __name__ == "__main__":
     port = int(
         os.environ.get("PORT", 10000)
     )
-
-    print("Starting AI Agent...")
-    print("Port:", port)
 
     app.run(
         host="0.0.0.0",
