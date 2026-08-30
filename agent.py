@@ -1,4 +1,4 @@
-
+```python
 import os
 import requests
 from flask import Flask, request, jsonify
@@ -13,7 +13,9 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = genai.Client(
+    api_key=GEMINI_API_KEY
+)
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -28,7 +30,7 @@ def home():
 
 
 # =========================
-# TELEGRAM
+# TELEGRAM WEBHOOK
 # =========================
 
 @app.route("/telegram", methods=["POST"])
@@ -53,20 +55,23 @@ def telegram():
 
     try:
 
-        # Gemini
+        # =========================
+        # GEMINI
+        # =========================
+
         response = client.models.generate_content(
-            model="gemini-3.6 flash",
+            model="gemini-3.6-flash",
             contents=text
         )
 
-        answer = response.text
+        answer = response.text or "Չկարողացա պատասխան կազմել։"
 
-        if not answer:
-            answer = "Չկարողացա պատասխան կազմել։"
+        print("GEMINI:", answer)
 
-        print("AI:", answer)
+        # =========================
+        # SEND TO TELEGRAM
+        # =========================
 
-        # Telegram
         tg = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
@@ -76,21 +81,24 @@ def telegram():
             timeout=30
         )
 
-        print("TELEGRAM:", tg.status_code)
-        print(tg.text)
+        print("TELEGRAM STATUS:", tg.status_code)
+        print("TELEGRAM RESPONSE:", tg.text)
 
     except Exception as e:
 
         print("ERROR:", repr(e))
 
-        requests.post(
-            f"{TELEGRAM_URL}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": "❌ Gemini-ի սխալ։ Ստուգում ենք server log-ը։"
-            },
-            timeout=20
-        )
+        try:
+            requests.post(
+                f"{TELEGRAM_URL}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "❌ Gemini-ի հետ կապի սխալ է տեղի ունեցել։"
+                },
+                timeout=20
+            )
+        except Exception as telegram_error:
+            print("TELEGRAM ERROR:", repr(telegram_error))
 
     return jsonify({"ok": True})
 
