@@ -30,7 +30,7 @@ def home():
 
 
 # =========================
-# TELEGRAM WEBHOOK
+# TELEGRAM
 # =========================
 
 @app.route("/telegram", methods=["POST"])
@@ -56,20 +56,64 @@ def telegram():
     try:
 
         # =========================
+        # SHOW AVAILABLE GEMINI MODELS
+        # =========================
+
+        print("AVAILABLE GEMINI MODELS:")
+
+        models = list(client.models.list())
+
+        for model in models:
+            print(model.name)
+
+        # =========================
+        # FIND A GEMINI MODEL
+        # =========================
+
+        model_name = None
+
+        for model in models:
+            name = model.name or ""
+
+            if "gemini" in name.lower() and "generateContent" in str(
+                getattr(model, "supported_actions", "")
+            ):
+                model_name = name
+                break
+
+        # Fallback
+        if not model_name:
+
+            for model in models:
+                name = model.name or ""
+
+                if "gemini" in name.lower():
+                    model_name = name
+                    break
+
+        if not model_name:
+            raise Exception("No Gemini model found for this API key.")
+
+        print("USING MODEL:", model_name)
+
+        # =========================
         # GEMINI
         # =========================
 
         response = client.models.generate_content(
-            model="gemini-3.6-flash",
+            model=model_name,
             contents=text
         )
 
-        answer = response.text or "Չկարողացա պատասխան կազմել։"
+        answer = response.text
 
-        print("GEMINI:", answer)
+        if not answer:
+            answer = "Չկարողացա պատասխան կազմել։"
+
+        print("GEMINI ANSWER:", answer)
 
         # =========================
-        # SEND TO TELEGRAM
+        # SEND TELEGRAM
         # =========================
 
         tg = requests.post(
@@ -89,15 +133,18 @@ def telegram():
         print("ERROR:", repr(e))
 
         try:
+
             requests.post(
                 f"{TELEGRAM_URL}/sendMessage",
                 json={
                     "chat_id": chat_id,
-                    "text": "❌ Gemini-ի հետ կապի սխալ է տեղի ունեցել։"
+                    "text": "❌ Gemini-ի հետ սխալ է տեղի ունեցել։"
                 },
                 timeout=20
             )
+
         except Exception as telegram_error:
+
             print("TELEGRAM ERROR:", repr(telegram_error))
 
     return jsonify({"ok": True})
