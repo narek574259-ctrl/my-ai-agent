@@ -1,16 +1,16 @@
-
 import os
-import threading
 import requests
 from flask import Flask, request, jsonify
 from google import genai
 
 app = Flask(__name__)
 
+# Gemini
 gemini = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"]
 )
 
+# Telegram
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -22,7 +22,7 @@ def home():
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    data = request.get_json()
+    data = request.get_json() or {}
     question = data.get("question", "")
 
     if not question:
@@ -38,61 +38,48 @@ def ask():
     })
 
 
-def telegram_loop():
-    offset = None
+# Telegram Webhook
+@app.route("/telegram", methods=["POST"])
+def telegram():
+    update = request.get_json() or {}
 
-    while True:
-        try:
-            params = {"timeout": 30}
+    message = update.get("message")
 
-            if offset is not None:
-                params["offset"] = offset
+    if not message:
+        return jsonify({"ok": True})
 
-            response = requests.get(
-                f"{TELEGRAM_URL}/getUpdates",
-                params=params,
-                timeout=40
-            )
+    chat_id = message["chat"]["id"]
+    question = message.get("text", "")
 
-            updates = response.json().get("result", [])
+    if not question:
+        return jsonify({"ok": True})
 
-            for update in updates:
-                offset = update["update_id"] + 1
+    try:
+        # Gemini պատասխան
+        response = gemini.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=question
+        )
 
-                message = update.get("message")
+        answer = response.text
 
-                if not message or "text" not in message:
-                    continue
+        # Ուղարկել Telegram
+        requests.post(
+            f"{TELEGRAM_URL}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": answer
+            },
+            timeout=20
+        )
 
-                chat_id = message["chat"]["id"]
-                question = message["text"]
+    except Exception as e:
+        print("ERROR:", e)
 
-                ai_response = gemini.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=question
-                )
-
-                answer = ai_response.text
-
-                requests.post(
-                    f"{TELEGRAM_URL}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": answer
-                    },
-                    timeout=20
-                )
-
-        except Exception as e:
-            print("Telegram error:", e)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
-    threading.Thread(
-        target=telegram_loop,
-        daemon=True
-    ).start()
-
     port = int(os.environ.get("PORT", 10000))
 
     app.run(
