@@ -6,23 +6,33 @@ from google import genai
 app = Flask(__name__)
 
 # =========================
-# Gemini
+# GEMINI
 # =========================
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise Exception("GEMINI_API_KEY is missing")
 
 gemini = genai.Client(
-    api_key=os.environ["GEMINI_API_KEY"]
+    api_key=GEMINI_API_KEY
 )
 
+
 # =========================
-# Telegram
+# TELEGRAM
 # =========================
 
-TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+
+if not TELEGRAM_TOKEN:
+    raise Exception("TELEGRAM_BOT_TOKEN is missing")
+
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 
 # =========================
-# Home
+# HOME
 # =========================
 
 @app.route("/")
@@ -31,14 +41,14 @@ def home():
 
 
 # =========================
-# Ask API
+# TEST GEMINI
 # =========================
 
 @app.route("/ask", methods=["POST"])
 def ask():
 
     data = request.get_json() or {}
-    question = data.get("question", "")
+    question = data.get("question", "").strip()
 
     if not question:
         return jsonify({
@@ -56,7 +66,7 @@ def ask():
 
         answer = response.text or "AI-ը պատասխան չտվեց։"
 
-        print("AI ANSWER:", answer)
+        print("GEMINI ANSWER:", answer)
 
         return jsonify({
             "answer": answer
@@ -67,12 +77,12 @@ def ask():
         print("GEMINI ERROR:", repr(e))
 
         return jsonify({
-            "error": str(e)
+            "error": "Gemini error"
         }), 500
 
 
 # =========================
-# Telegram Webhook
+# TELEGRAM WEBHOOK
 # =========================
 
 @app.route("/telegram", methods=["POST"])
@@ -87,27 +97,35 @@ def telegram():
     if not message:
         return jsonify({"ok": True})
 
-    chat_id = message["chat"]["id"]
-    question = message.get("text", "")
+    chat = message.get("chat", {})
+    chat_id = chat.get("id")
 
-    if not question:
+    question = message.get("text", "").strip()
+
+    if not chat_id or not question:
         return jsonify({"ok": True})
 
     try:
 
-        print("QUESTION:", question)
+        print("USER MESSAGE:", question)
 
-        # Gemini
+        # -------------------------
+        # ASK GEMINI
+        # -------------------------
+
         response = gemini.models.generate_content(
             model="gemini-2.5-flash",
             contents=question
         )
 
-        answer = response.text or "AI-ը պատասխան չտվեց։"
+        answer = response.text or "Չկարողացա պատասխանել։"
 
         print("GEMINI ANSWER:", answer)
 
-        # Telegram
+        # -------------------------
+        # SEND TO TELEGRAM
+        # -------------------------
+
         telegram_response = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
@@ -127,9 +145,12 @@ def telegram():
             telegram_response.text
         )
 
+        if not telegram_response.ok:
+            print("TELEGRAM SEND ERROR")
+
     except Exception as e:
 
-        print("ERROR:", repr(e))
+        print("TELEGRAM/GEMINI ERROR:", repr(e))
 
         try:
 
@@ -153,7 +174,7 @@ def telegram():
 
 
 # =========================
-# Start server
+# START
 # =========================
 
 if __name__ == "__main__":
@@ -161,6 +182,9 @@ if __name__ == "__main__":
     port = int(
         os.environ.get("PORT", 10000)
     )
+
+    print("Starting AI Agent...")
+    print("Port:", port)
 
     app.run(
         host="0.0.0.0",
