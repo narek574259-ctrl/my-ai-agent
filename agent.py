@@ -28,17 +28,23 @@ def ask():
     if not question:
         return jsonify({"error": "Question is required"}), 400
 
-    response = gemini.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=question
-    )
+    try:
+        response = gemini.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=question
+        )
 
-    return jsonify({
-        "answer": response.text
-    })
+        return jsonify({
+            "answer": response.text
+        })
+
+    except Exception as e:
+        print("Gemini error:", e)
+        return jsonify({
+            "error": "AI error"
+        }), 500
 
 
-# Telegram Webhook
 @app.route("/telegram", methods=["POST"])
 def telegram():
     update = request.get_json() or {}
@@ -55,16 +61,16 @@ def telegram():
         return jsonify({"ok": True})
 
     try:
-        # Gemini պատասխան
+        # Gemini
         response = gemini.models.generate_content(
-            model="gemini-3.6-flash",
+            model="gemini-2.5-flash",
             contents=question
         )
 
         answer = response.text
 
-        # Ուղարկել Telegram
-        requests.post(
+        # Telegram
+        result = requests.post(
             f"{TELEGRAM_URL}/sendMessage",
             json={
                 "chat_id": chat_id,
@@ -72,6 +78,8 @@ def telegram():
             },
             timeout=20
         )
+
+        print("Telegram response:", result.text)
 
     except Exception as e:
         print("ERROR:", e)
